@@ -155,12 +155,22 @@ export function getGitHubClient(accessToken: string) {
 
 	return {
 		async isOrgMember(org: string): Promise<boolean> {
+			// Try the org-membership endpoint first (covers GitHub organisations).
 			try {
 				await restGet<unknown>(
 					`${REST_URL}/user/memberships/orgs/${encodeURIComponent(org)}`,
 					{ revalidate: 300 }
 				);
 				return true;
+			} catch { /* not an org, or not a member — fall through */ }
+
+			// Also allow personal-account projects: the "org" equals the user's own login.
+			try {
+				const { data } = await restGet<{ login: string }>(
+					`${REST_URL}/user`,
+					{ revalidate: 300 }
+				);
+				return data.login.toLowerCase() === org.toLowerCase();
 			} catch {
 				return false;
 			}

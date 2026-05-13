@@ -1,7 +1,12 @@
 import type { RiceScore } from "@/types";
 import type { ScoreStore } from "./types";
 
-const store = new Map<string, RiceScore>();
+// In Next.js dev mode, hot-module replacement re-evaluates modules on every
+// file save, which would reset a plain module-level Map to empty. Pinning the
+// store to globalThis means it survives across HMR cycles.
+const g = globalThis as typeof globalThis & { __riceScoreStore?: Map<string, RiceScore> };
+if (!g.__riceScoreStore) g.__riceScoreStore = new Map();
+const store = g.__riceScoreStore;
 
 function key(org: string, projectId: string, issueId: string): string {
 	return `${org}|${projectId}|${issueId}`;

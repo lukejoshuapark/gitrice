@@ -2,15 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScoreCell } from "./ScoreCell";
-import { computeRiceScore } from "@/lib/rice";
-import type { GitHubIssue, IssueWithScore, RiceScore } from "@/types";
+import type { IssueWithScore, RiceScore } from "@/types";
 
 interface IssueTableProps {
 	org: string;
 	projectId: string;
 }
-
-const EMPTY_SCORE: RiceScore = { reach: null, impact: null, confidence: null, effort: null };
 
 function Spinner({ className }: { className?: string }) {
 	return (
@@ -76,26 +73,17 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 		}
 		setError(null);
 		try {
-			const [issuesRes, scoresRes] = await Promise.all([
-				fetch(`/api/issues?projectId=${encodeURIComponent(projectId)}`),
-				fetch(`/api/scores?org=${encodeURIComponent(org)}&projectId=${encodeURIComponent(projectId)}`),
-			]);
+			const issuesRes = await fetch(
+				`/api/issues?projectId=${encodeURIComponent(projectId)}&org=${encodeURIComponent(org)}`
+			);
 
 			if (!issuesRes.ok) throw new Error("Failed to load issues");
-			if (!scoresRes.ok) throw new Error("Failed to load scores");
 
-			// /api/issues now returns { issues, riceScoreFieldId } in one response,
-			// eliminating the separate /api/projects/fields round-trip.
-			const { issues: rawIssues, riceScoreFieldId: fieldId } =
-				await issuesRes.json() as { issues: GitHubIssue[]; riceScoreFieldId: string | null };
-			const scoresData = await scoresRes.json() as Record<string, RiceScore>;
+			// Server returns issues already merged with scores, computed, and sorted.
+			const { issues: merged, riceScoreFieldId: fieldId } =
+				await issuesRes.json() as { issues: IssueWithScore[]; riceScoreFieldId: string | null };
 
 			setRiceScoreFieldId(fieldId);
-
-			const merged: IssueWithScore[] = rawIssues.map((issue) => {
-				const score = scoresData[issue.id] ?? { ...EMPTY_SCORE };
-				return { ...issue, score, computedScore: computeRiceScore(score) };
-			});
 
 			if (silent) {
 				// Don't overwrite rows that were busy when this refresh started.
@@ -175,6 +163,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 			return next;
 		});
 
+		let saved = false;
 		try {
 			let url = `/api/scores?org=${encodeURIComponent(org)}&projectId=${encodeURIComponent(projectId)}&issueId=${encodeURIComponent(issueId)}`;
 			url += `&projectItemId=${encodeURIComponent(issueMeta.projectItemId)}`;
@@ -187,6 +176,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 				body: JSON.stringify(updates),
 			});
 			if (!res.ok) throw new Error("Save failed");
+			saved = true;
 		} catch {
 			setErrorCells((prev) => {
 				const next = new Set(prev);
@@ -196,6 +186,8 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 				return next;
 			});
 		} finally {
+			// Clear before the refresh so the issue is no longer "busy" and the
+			// refresh can freely apply the server's newly computed score.
 			savingRef.current.delete(issueId);
 			setSavingIssues((prev) => {
 				const next = new Set(prev);
@@ -203,15 +195,16 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 				return next;
 			});
 		}
-	}, [org, projectId]);
+		// Fetch the server-computed score now that the save is confirmed.
+		if (saved) void fetchData({ silent: true });
+	}, [org, projectId, fetchData]);
 
-	/** Called by ScoreCell on every keystroke — optimistic UI update only; save is deferred to row-blur. */
+	/** Called by ScoreCell on every keystroke — updates field values locally; score recomputed by server on save. */
 	const handleFieldChange = useCallback((issueId: string, field: keyof RiceScore, value: number | null) => {
 		setIssues((prev) =>
 			prev.map((issue) => {
 				if (issue.id !== issueId) return issue;
-				const updatedScore = { ...issue.score, [field]: value };
-				return { ...issue, score: updatedScore, computedScore: computeRiceScore(updatedScore) };
+				return { ...issue, score: { ...issue.score, [field]: value } };
 			})
 		);
 
@@ -253,10 +246,9 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 		if (targetItems.length === 0) return;
 		const targetIds = targetItems.map((t) => t.issueId);
 
-		// Mark all target issues as busy before the POST so any auto-refresh that
-		// fires during the in-flight request preserves the about-to-be-written values.
 		targetIds.forEach((id) => propagatingRef.current.add(id));
 		setPropagatingMilestones((prev) => new Set([...prev, milestoneTitle]));
+		let propagated = false;
 		try {
 			const res = await fetch("/api/scores/propagate", {
 				method: "POST",
@@ -270,12 +262,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 				}),
 			});
 			if (!res.ok) throw new Error("Failed to propagate scores");
-			setIssues((prev) =>
-				prev.map((issue) => {
-					if (!targetIds.includes(issue.id)) return issue;
-					return { ...issue, score: sourceIssue.score, computedScore: computeRiceScore(sourceIssue.score) };
-				})
-			);
+			propagated = true;
 		} catch (err) {
 			console.error("Propagate failed:", err);
 		} finally {
@@ -286,7 +273,9 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 				return next;
 			});
 		}
-	}, [issues, org, projectId, riceScoreFieldId]);
+		// Refresh from the server so the UI reflects what was actually written.
+		if (propagated) void fetchData({ silent: true });
+	}, [issues, org, projectId, riceScoreFieldId, fetchData]);
 
 	// Issues where "Push to Milestone" should appear: has a computed score AND
 	// shares a milestone with at least one other issue whose computed score differs.
@@ -309,19 +298,10 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 		return eligible;
 	}, [issues]);
 
-	const displayedIssues = useMemo(() => {
-		let list = [...issues];
-		if (milestoneFilter) {
-			list = list.filter((i) => i.milestone?.title === milestoneFilter);
-		}
-		return list.sort((a, b) => {
-			if (a.computedScore === null && b.computedScore === null) return a.title.localeCompare(b.title);
-			if (a.computedScore === null) return 1;
-			if (b.computedScore === null) return -1;
-			const scoreDiff = b.computedScore - a.computedScore;
-			return scoreDiff !== 0 ? scoreDiff : a.title.localeCompare(b.title);
-		});
-	}, [issues, milestoneFilter]);
+	const displayedIssues = useMemo(
+		() => milestoneFilter ? issues.filter((i) => i.milestone?.title === milestoneFilter) : issues,
+		[issues, milestoneFilter]
+	);
 
 	if (loading) {
 		return (
@@ -558,7 +538,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 					</table>
 				</div>
 			</div>
-			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 0.2.2</p>
+			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 0.2.3</p>
 		</>
 	);
 }
