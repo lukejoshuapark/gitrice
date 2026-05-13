@@ -154,6 +154,18 @@ export function getGitHubClient(accessToken: string) {
 	}
 
 	return {
+		async isOrgMember(org: string): Promise<boolean> {
+			try {
+				await restGet<unknown>(
+					`${REST_URL}/user/memberships/orgs/${encodeURIComponent(org)}`,
+					{ revalidate: 300 }
+				);
+				return true;
+			} catch {
+				return false;
+			}
+		},
+
 		async getUserOrgs(): Promise<GitHubOrg[]> {
 			const orgs: GitHubOrg[] = [];
 			let nextUrl: string | null = `${REST_URL}/user/orgs?per_page=100`;

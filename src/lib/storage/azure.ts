@@ -10,8 +10,10 @@ interface ScoreEntity extends TableEntity {
 }
 
 function partitionKey(org: string, projectId: string): string {
-	// Replace characters invalid in Azure Table Storage partition/row keys
-	return `${org}__${projectId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+	// Strip any character that isn't valid in Azure Table Storage keys or that
+	// could be injected into OData filter strings. GitHub org names are already
+	// [a-zA-Z0-9-], but we sanitize here as a defence-in-depth measure.
+	return `${org.replace(/[^a-zA-Z0-9-]/g, "_")}__${projectId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 }
 
 function getClient(): TableClient {

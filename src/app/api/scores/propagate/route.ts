@@ -24,6 +24,11 @@ export async function POST(request: NextRequest) {
 		return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
 	}
 
+	const client = getGitHubClient(session.accessToken);
+	if (!(await client.isOrgMember(org))) {
+		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+	}
+
 	const fields = ["reach", "impact", "confidence", "effort"] as const;
 	for (const field of fields) {
 		const val = score[field];
@@ -38,10 +43,9 @@ export async function POST(request: NextRequest) {
 
 		// Push computed RICE score back to GitHub using a single batched mutation
 		// instead of N separate requests.
-		if (fieldId && session.accessToken) {
+		if (fieldId) {
 			const computed = computeRiceScore(score);
 			if (computed !== null) {
-				const client = getGitHubClient(session.accessToken);
 				const itemIds = items.map((i) => i.itemId);
 				await client
 					.batchUpdateProjectItemScores(projectId, itemIds, fieldId, Math.round(computed))

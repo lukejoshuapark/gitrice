@@ -41,6 +41,10 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 	// single PUT fires for all dirty fields instead of one PUT per field.
 	const pendingUpdates = useRef<Map<string, Partial<RiceScore>>>(new Map());
 	const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+	// Tracks issues whose PUT is currently in-flight (pendingUpdates is cleared before the response arrives).
+	const savingRef = useRef<Set<string>>(new Set());
+	// Tracks which issue row currently has keyboard focus (including focus before any typing).
+	const focusedIssueRef = useRef<string | null>(null);
 	// Stable ref so flushSave closure always sees current issue metadata.
 	const issueMetaRef = useRef<Map<string, { projectItemId: string }>>(new Map());
 
@@ -83,7 +87,10 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 				setIssues((prev) => {
 					const prevMap = new Map(prev.map((i) => [i.id, i]));
 					return merged.map((m) =>
-						(pendingUpdates.current.has(m.id) || debounceTimers.current.has(m.id))
+						(pendingUpdates.current.has(m.id) ||
+						 debounceTimers.current.has(m.id) ||
+						 savingRef.current.has(m.id) ||
+						 focusedIssueRef.current === m.id)
 							? (prevMap.get(m.id) ?? m)
 							: m
 					);
@@ -141,6 +148,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 	const flushSave = useCallback(async (issueId: string) => {
 		const updates = pendingUpdates.current.get(issueId);
 		if (!updates || Object.keys(updates).length === 0) return;
+		savingRef.current.add(issueId);
 		pendingUpdates.current.delete(issueId);
 
 		const issueMeta = issueMetaRef.current.get(issueId);
@@ -176,6 +184,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 				return next;
 			});
 		} finally {
+			savingRef.current.delete(issueId);
 			setSavingIssues((prev) => {
 				const next = new Set(prev);
 				next.delete(issueId);
@@ -261,6 +270,27 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 			});
 		}
 	}, [issues, org, projectId, riceScoreFieldId]);
+
+	// Issues where "Push to Milestone" should appear: has a computed score AND
+	// shares a milestone with at least one other issue whose computed score differs.
+	const milestonePushEligible = useMemo(() => {
+		const byMilestone = new Map<string, IssueWithScore[]>();
+		for (const issue of issues) {
+			if (!issue.milestone || issue.computedScore === null) continue;
+			const title = issue.milestone.title;
+			if (!byMilestone.has(title)) byMilestone.set(title, []);
+			byMilestone.get(title)!.push(issue);
+		}
+		const eligible = new Set<string>();
+		for (const siblings of byMilestone.values()) {
+			if (siblings.length < 2) continue;
+			const first = siblings[0].computedScore;
+			if (siblings.some((s) => s.computedScore !== first)) {
+				for (const s of siblings) eligible.add(s.id);
+			}
+		}
+		return eligible;
+	}, [issues]);
 
 	const displayedIssues = useMemo(() => {
 		let list = [...issues];
@@ -376,7 +406,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 								</th>
 								<th className="px-4 py-3 text-center font-semibold text-github-fg w-32">
 									<span title="(Reach x Impact x Confidence) / Effort">RICE Score</span>
-								</th>							<th className="px-2 py-3 w-10" />							</tr>
+								</th>							<th className="px-2 py-3 w-36" />							</tr>
 						</thead>
 						<tbody className="divide-y divide-github-border-muted">
 							{displayedIssues.map((issue) => {
@@ -386,8 +416,10 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 								return (
 									<tr
 										key={issue.id}
+										onFocus={() => { focusedIssueRef.current = issue.id; }}
 										onBlur={(e) => {
 											if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+												focusedIssueRef.current = null;
 												handleRowBlur(issue.id);
 											}
 										}}
@@ -491,14 +523,14 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 											</div>
 										</td>
 										<td className="px-2 py-3 text-center">
-											{issue.computedScore !== null && (
+											{milestonePushEligible.has(issue.id) && (
 												<button
 													onClick={() => handlePropagate(issue)}
 													disabled={isPropagating}
 													title="Copy RICE values to all issues with the same milestone"
-													className="rounded p-1 text-lg leading-none transition-colors hover:bg-github-canvas-subtle disabled:opacity-40"
+													className="rounded border border-github-border px-2 py-1 text-xs text-github-fg-muted transition-colors hover:border-github-accent hover:text-github-accent disabled:opacity-40"
 												>
-												🪧
+													Push to Milestone
 												</button>
 											)}
 										</td>
@@ -509,6 +541,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 					</table>
 				</div>
 			</div>
+			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 0.2.1</p>
 		</>
 	);
 }

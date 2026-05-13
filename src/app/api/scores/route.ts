@@ -18,6 +18,11 @@ export async function GET(request: NextRequest) {
 		return NextResponse.json({ error: "Missing org or projectId parameter" }, { status: 400 });
 	}
 
+	const client = getGitHubClient(session.accessToken);
+	if (!(await client.isOrgMember(org))) {
+		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+	}
+
 	try {
 		const store = getScoreStore();
 		const scores = await store.getScores(org, projectId);
@@ -44,6 +49,11 @@ export async function PUT(request: NextRequest) {
 		return NextResponse.json({ error: "Missing org, projectId, or issueId parameter" }, { status: 400 });
 	}
 
+	const client = getGitHubClient(session.accessToken);
+	if (!(await client.isOrgMember(org))) {
+		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+	}
+
 	let body: Partial<RiceScore>;
 	try {
 		body = await request.json() as Partial<RiceScore>;
@@ -66,10 +76,9 @@ export async function PUT(request: NextRequest) {
 		const merged = await store.setScore(org, projectId, issueId, body);
 
 		// Optionally push computed RICE score back to the GitHub project custom field
-		if (projectItemId && fieldId && session.accessToken) {
+		if (projectItemId && fieldId) {
 			const computed = computeRiceScore(merged);
 			if (computed !== null) {
-				const client = getGitHubClient(session.accessToken);
 				await client.updateProjectItemScore(projectId, projectItemId, fieldId, Math.round(computed)).catch(() => {
 					// Non-fatal: GitHub sync failure does not fail the local save
 				});
