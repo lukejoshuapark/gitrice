@@ -26,7 +26,9 @@ export async function GET(request: NextRequest) {
 	try {
 		const store = getScoreStore();
 		const scores = await store.getScores(org, projectId);
-		return NextResponse.json(scores);
+		return NextResponse.json(scores, {
+			headers: { "Cache-Control": "no-store" },
+		});
 	} catch (err) {
 		const message = err instanceof Error ? err.message : "Unknown error";
 		return NextResponse.json({ error: message }, { status: 500 });

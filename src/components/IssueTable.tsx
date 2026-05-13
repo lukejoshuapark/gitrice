@@ -43,6 +43,8 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 	const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 	// Tracks issues whose PUT is currently in-flight (pendingUpdates is cleared before the response arrives).
 	const savingRef = useRef<Set<string>>(new Set());
+	// Tracks issues that are part of an in-flight propagation POST.
+	const propagatingRef = useRef<Set<string>>(new Set());
 	// Tracks which issue row currently has keyboard focus (including focus before any typing).
 	const focusedIssueRef = useRef<string | null>(null);
 	// Stable ref so flushSave closure always sees current issue metadata.
@@ -55,6 +57,19 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 
 	const fetchData = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
 		if (silent && loadingRef.current) return;
+
+		// Snapshot which issues are busy RIGHT NOW, before any awaits.
+		// Checking inside the setIssues updater is too late — a save or propagation
+		// can complete during the network round-trip and clear its own ref, causing
+		// the stale GET response to overwrite data the user just changed.
+		const busyAtFetchStart = silent ? new Set<string>([
+			...pendingUpdates.current.keys(),
+			...debounceTimers.current.keys(),
+			...savingRef.current,
+			...propagatingRef.current,
+			...(focusedIssueRef.current ? [focusedIssueRef.current] : []),
+		]) : null;
+
 		if (!silent) {
 			setLoading(true);
 			loadingRef.current = true;
@@ -83,14 +98,11 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 			});
 
 			if (silent) {
-				// Don't overwrite rows that have in-flight edits.
+				// Don't overwrite rows that were busy when this refresh started.
 				setIssues((prev) => {
 					const prevMap = new Map(prev.map((i) => [i.id, i]));
 					return merged.map((m) =>
-						(pendingUpdates.current.has(m.id) ||
-						 debounceTimers.current.has(m.id) ||
-						 savingRef.current.has(m.id) ||
-						 focusedIssueRef.current === m.id)
+						busyAtFetchStart!.has(m.id)
 							? (prevMap.get(m.id) ?? m)
 							: m
 					);
@@ -240,6 +252,10 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 			.map((i) => ({ issueId: i.id, itemId: i.projectItemId }));
 		if (targetItems.length === 0) return;
 		const targetIds = targetItems.map((t) => t.issueId);
+
+		// Mark all target issues as busy before the POST so any auto-refresh that
+		// fires during the in-flight request preserves the about-to-be-written values.
+		targetIds.forEach((id) => propagatingRef.current.add(id));
 		setPropagatingMilestones((prev) => new Set([...prev, milestoneTitle]));
 		try {
 			const res = await fetch("/api/scores/propagate", {
@@ -263,6 +279,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 		} catch (err) {
 			console.error("Propagate failed:", err);
 		} finally {
+			targetIds.forEach((id) => propagatingRef.current.delete(id));
 			setPropagatingMilestones((prev) => {
 				const next = new Set(prev);
 				next.delete(milestoneTitle);
@@ -541,7 +558,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 					</table>
 				</div>
 			</div>
-			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 0.2.1</p>
+			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 0.2.2</p>
 		</>
 	);
 }
