@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 		const client = getGitHubClient(session.accessToken);
 		const projects = await client.getOrgProjects(org);
 		return NextResponse.json(projects, {
-			headers: { "Cache-Control": "public, s-maxage=120, stale-while-revalidate=300" },
+			headers: { "Cache-Control": "private, no-store" },
 		});
 	} catch (err) {
 		const message = err instanceof Error ? err.message : "Unknown error";

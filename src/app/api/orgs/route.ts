@@ -12,7 +12,7 @@ export async function GET() {
 		const client = getGitHubClient(session.accessToken);
 		const orgs = await client.getUserOrgs();
 		return NextResponse.json(orgs, {
-			headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" },
+			headers: { "Cache-Control": "private, no-store" },
 		});
 	} catch (err) {
 		const message = err instanceof Error ? err.message : "Unknown error";
