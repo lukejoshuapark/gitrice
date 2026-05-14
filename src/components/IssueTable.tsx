@@ -53,14 +53,20 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 	const { issues: fetchedIssues, riceScoreFieldId, isLoading, error, refreshInterval, dataUpdatedAt, resetAndRefetch } = useIssues({
 		org,
 		projectId,
-		getBusyIds: saveManager.getBusyIds,
 		autoRefresh,
 	});
 
-	// Sync fetched issues into local state; keep field-ids ref current.
+	// Sync fetched issues into local state, protecting any rows that are currently busy
+	// (focused / pending save) so background polls never wipe the user's in-progress edits.
+	const { getBusyIds } = saveManager;
 	useEffect(() => {
-		setIssues(fetchedIssues);
-	}, [fetchedIssues]);
+		setIssues((prev) => {
+			const busy = getBusyIds();
+			if (busy.size === 0) return fetchedIssues;
+			const prevMap = new Map(prev.map((i) => [i.id, i]));
+			return fetchedIssues.map((i) => (busy.has(i.id) ? (prevMap.get(i.id) ?? i) : i));
+		});
+	}, [fetchedIssues, getBusyIds]);
 
 	useEffect(() => {
 		riceScoreFieldIdRef.current = riceScoreFieldId;
@@ -423,7 +429,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 					)}
 				</div>
 			</div>
-			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 1.5.3</p>
+			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 1.5.4</p>
 		</>
 	);
 }

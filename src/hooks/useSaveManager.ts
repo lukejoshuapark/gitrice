@@ -34,7 +34,7 @@ export function useSaveManager({
 	const lastSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	/** Returns the set of issue IDs that should not be overwritten by a background refresh. */
-	function getBusyIds(): Set<string> {
+	const getBusyIds = useCallback((): Set<string> => {
 		return new Set([
 			...pendingUpdates.current.keys(),
 			...debounceTimers.current.keys(),
@@ -42,7 +42,7 @@ export function useSaveManager({
 			...propagatingRef.current,
 			...(focusedIssueRef.current ? [focusedIssueRef.current] : []),
 		]);
-	}
+	}, []);
 
 	/** Keep the metadata map current whenever the issue list changes. */
 	function syncIssueMeta(issues: IssueWithScore[]) {
