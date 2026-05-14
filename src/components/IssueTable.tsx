@@ -423,7 +423,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 					)}
 				</div>
 			</div>
-			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 1.5.2</p>
+			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 1.5.3</p>
 		</>
 	);
 }

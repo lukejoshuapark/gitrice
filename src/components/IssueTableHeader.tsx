@@ -1,7 +1,7 @@
 import clsx from "clsx";
 
-// r=8, circumference = 2π×8 ≈ 50.27 — must match the CSS keyframe in globals.css
-const RING_R = 8;
+// r=5, circumference = 2π×5 ≈ 31.42 — must match the CSS keyframe in globals.css
+const RING_R = 5;
 const RING_C = 2 * Math.PI * RING_R;
 
 function CountdownRing({
@@ -15,23 +15,23 @@ function CountdownRing({
 }) {
 	return (
 		<svg
-			width="20"
-			height="20"
-			viewBox="0 0 20 20"
+			width="12"
+			height="12"
+			viewBox="0 0 12 12"
 			className="-rotate-90"
 			aria-label={active ? `Next refresh in ~${Math.round(interval / 1000)}s` : "Auto-refresh paused"}
 		>
 			{/* Dim track */}
-			<circle cx="10" cy="10" r={RING_R} fill="none" stroke="currentColor" strokeWidth="2" className="opacity-20" />
+			<circle cx="6" cy="6" r={RING_R} fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-20" />
 			{/* Animated arc — remounts (via key) on every fetch to restart the animation */}
 			<circle
 				key={active ? fetchKey : 0}
-				cx="10"
-				cy="10"
+				cx="6"
+				cy="6"
 				r={RING_R}
 				fill="none"
 				stroke="currentColor"
-				strokeWidth="2"
+				strokeWidth="1.5"
 				strokeLinecap="round"
 				strokeDasharray={RING_C}
 				strokeDashoffset={active ? 0 : RING_C}
@@ -121,6 +121,7 @@ export function IssueTableHeader({
 				</label>
 				<div className="flex items-center gap-2">
 					<CountdownRing interval={refreshInterval} fetchKey={fetchKey} active={autoRefresh} />
+					<span className="text-sm">Auto-refresh</span>
 					<button
 						role="switch"
 						aria-checked={autoRefresh}
