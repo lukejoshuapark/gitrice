@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { getGitHubClient } from "@/lib/github/client";
 import { getScoreStore } from "@/lib/storage";
 import { computeRiceScore } from "@/lib/rice";
+import { requireAuth, handleApiError } from "@/lib/api/helpers";
 import type { IssueWithScore, RiceScore } from "@/types";
 
 const EMPTY_SCORE: RiceScore = { reach: null, impact: null, confidence: null, effort: null };
 
 export async function GET(request: NextRequest) {
-	const session = await auth();
-	if (!session?.accessToken) {
-		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-	}
+	const auth = await requireAuth();
+	if (auth instanceof NextResponse) return auth;
 
 	const projectId = request.nextUrl.searchParams.get("projectId");
 	const org = request.nextUrl.searchParams.get("org");
@@ -21,7 +19,7 @@ export async function GET(request: NextRequest) {
 	}
 
 	try {
-		const client = getGitHubClient(session.accessToken);
+		const client = getGitHubClient(auth.accessToken);
 
 		const [rawIssues, riceScoreFieldId, scoresData] = await Promise.all([
 			client.getProjectItems(projectId),
@@ -47,7 +45,6 @@ export async function GET(request: NextRequest) {
 			headers: { "Cache-Control": "no-store" },
 		});
 	} catch (err) {
-		const message = err instanceof Error ? err.message : "Unknown error";
-		return NextResponse.json({ error: message }, { status: 500 });
+		return handleApiError(err);
 	}
 }

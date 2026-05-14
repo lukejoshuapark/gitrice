@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { getScoreStore } from "@/lib/storage";
 import { getGitHubClient } from "@/lib/github/client";
 import { computeRiceScore } from "@/lib/rice";
+import {
+	requireAuth,
+	requireOrgMember,
+	validateRiceScore,
+	handleApiError,
+} from "@/lib/api/helpers";
 import type { RiceScore } from "@/types";
 
 export async function POST(request: NextRequest) {
-	const session = await auth();
-	if (!session?.accessToken) {
-		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-	}
+	const auth = await requireAuth();
+	if (auth instanceof NextResponse) return auth;
 
 	let body: { org: string; projectId: string; score: RiceScore; items: { issueId: string; itemId: string }[]; fieldId?: string };
 	try {
@@ -24,40 +27,30 @@ export async function POST(request: NextRequest) {
 		return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
 	}
 
-	const client = getGitHubClient(session.accessToken);
-	if (!(await client.isOrgMember(org))) {
-		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-	}
+	const client = getGitHubClient(auth.accessToken);
+	const forbidden = await requireOrgMember(client, org);
+	if (forbidden) return forbidden;
 
-	const fields = ["reach", "impact", "confidence", "effort"] as const;
-	for (const field of fields) {
-		const val = score[field];
-		if (val !== undefined && val !== null && typeof val !== "number") {
-			return NextResponse.json({ error: `Invalid value for ${field}` }, { status: 400 });
-		}
-	}
+	const invalid = validateRiceScore(score);
+	if (invalid) return invalid;
 
 	try {
 		const store = getScoreStore();
 		await Promise.all(items.map(({ issueId }) => store.setScore(org, projectId, issueId, score)));
 
-		// Push computed RICE score back to GitHub using a single batched mutation
-		// instead of N separate requests.
+		// Push computed RICE score back to GitHub using a single batched mutation.
 		if (fieldId) {
 			const computed = computeRiceScore(score);
 			if (computed !== null) {
 				const itemIds = items.map((i) => i.itemId);
 				await client
 					.batchUpdateProjectItemScores(projectId, itemIds, fieldId, Math.round(computed))
-					.catch(() => {
-						// Non-fatal: GitHub sync failure does not fail the local save
-					});
+					.catch(() => {});
 			}
 		}
 
 		return NextResponse.json({ updated: items.length });
 	} catch (err) {
-		const message = err instanceof Error ? err.message : "Unknown error";
-		return NextResponse.json({ error: message }, { status: 500 });
+		return handleApiError(err);
 	}
 }

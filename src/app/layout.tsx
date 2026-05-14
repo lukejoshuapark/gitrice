@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
+import { Providers } from "./providers";
 import { auth } from "@/auth";
 
 export const metadata: Metadata = {
@@ -18,8 +19,10 @@ export default async function RootLayout({
 	return (
 		<html lang="en">
 			<body className="min-h-screen bg-github-canvas text-github-fg antialiased">
-				{session && <Nav user={session.user} />}
-				{children}
+				<Providers>
+					{session && <Nav user={session.user} />}
+					{children}
+				</Providers>
 			</body>
 		</html>
 	);

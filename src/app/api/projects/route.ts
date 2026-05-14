@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { getGitHubClient } from "@/lib/github/client";
+import { requireAuth, handleApiError } from "@/lib/api/helpers";
 
 export async function GET(request: NextRequest) {
-	const session = await auth();
-	if (!session?.accessToken) {
-		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-	}
+	const auth = await requireAuth();
+	if (auth instanceof NextResponse) return auth;
 
 	const org = request.nextUrl.searchParams.get("org");
 	if (!org) {
@@ -14,13 +12,12 @@ export async function GET(request: NextRequest) {
 	}
 
 	try {
-		const client = getGitHubClient(session.accessToken);
+		const client = getGitHubClient(auth.accessToken);
 		const projects = await client.getOrgProjects(org);
 		return NextResponse.json(projects, {
 			headers: { "Cache-Control": "private, no-store" },
 		});
 	} catch (err) {
-		const message = err instanceof Error ? err.message : "Unknown error";
-		return NextResponse.json({ error: message }, { status: 500 });
+		return handleApiError(err);
 	}
 }

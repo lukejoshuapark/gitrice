@@ -1,4 +1,5 @@
 "use client";
+import clsx from "clsx";
 
 import { useEffect, useState } from "react";
 import type { RiceScore } from "@/types";
@@ -44,13 +45,13 @@ export function ScoreCell({ field, value, error, onChange, onCommit }: ScoreCell
 				onKeyDown={handleKeyDown}
 				aria-label={`${inputLabel} for issue`}
 				placeholder="—"
-				className={[
+				className={clsx(
 					"w-20 rounded border px-2 py-1 text-right text-sm",
 					"focus:outline-none focus:ring-1",
 					error
 						? "border-github-danger bg-red-50 focus:ring-github-danger"
 						: "border-github-border bg-white focus:border-github-accent focus:ring-github-accent",
-				].join(" ")}
+				)}
 			/>
 		</div>
 	);
