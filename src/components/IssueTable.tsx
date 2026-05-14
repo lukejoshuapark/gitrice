@@ -131,10 +131,13 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 	// Stable ref so flushSave closure always sees current issue metadata.
 	const issueMetaRef = useRef<Map<string, { projectItemId: string }>>(new Map());
 
+	const [refreshInterval, setRefreshInterval] = useState(10_000);
+
 	const riceScoreFieldIdRef = useRef<string | null>(null);
 	riceScoreFieldIdRef.current = riceScoreFieldId;
-	const lastActivityRef = useRef(Date.now());
 	const loadingRef = useRef(false);
+	const lastIssueHashRef = useRef<string | null>(null);
+	const lastHashChangeTimeRef = useRef<number>(Date.now());
 
 	const fetchData = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
 		if (silent && loadingRef.current) return;
@@ -179,8 +182,20 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 							: m
 					);
 				});
+				// Adjust polling rate based on whether the issue list changed.
+				const newHash = merged.map((i) => i.id).join(",");
+				if (newHash !== lastIssueHashRef.current) {
+					lastIssueHashRef.current = newHash;
+					lastHashChangeTimeRef.current = Date.now();
+					setRefreshInterval(5_000);
+				} else {
+					setRefreshInterval((prev) => Math.min(prev + 1_000, 30_000));
+				}
 			} else {
 				setIssues(merged);
+				// Establish baseline hash on initial load.
+				lastIssueHashRef.current = merged.map((i) => i.id).join(",");
+				lastHashChangeTimeRef.current = Date.now();
 			}
 		} catch (err) {
 			if (!silent) setError(err instanceof Error ? err.message : "An error occurred");
@@ -204,29 +219,18 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 		);
 	}, [issues]);
 
-	// Track user activity to auto-disable refresh after 5 minutes of inactivity.
-	useEffect(() => {
-		const onActivity = () => { lastActivityRef.current = Date.now(); };
-		document.addEventListener("pointermove", onActivity, { passive: true });
-		document.addEventListener("keydown", onActivity, { passive: true });
-		return () => {
-			document.removeEventListener("pointermove", onActivity);
-			document.removeEventListener("keydown", onActivity);
-		};
-	}, []);
-
-	// Auto-refresh every 10 s; disables itself after 5 minutes of inactivity.
+	// Auto-refresh at adaptive interval; disables after 10 minutes with no data change.
 	useEffect(() => {
 		if (!autoRefresh) return;
 		const id = setInterval(async () => {
-			if (Date.now() - lastActivityRef.current > 5 * 60 * 1000) {
+			if (Date.now() - lastHashChangeTimeRef.current > 10 * 60 * 1000) {
 				setAutoRefresh(false);
 				return;
 			}
 			await fetchData({ silent: true });
-		}, 10_000);
+		}, refreshInterval);
 		return () => clearInterval(id);
-	}, [autoRefresh, fetchData]);
+	}, [autoRefresh, fetchData, refreshInterval]);
 
 	/** Flush all pending field changes for an issue as a single PUT request. */
 	const flushSave = useCallback(async (issueId: string) => {
@@ -477,7 +481,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 					<h2 className="text-xl font-semibold text-github-fg">Project Issues</h2>
 					<p className="mt-1 text-sm text-github-fg-muted">A utility tool for RICE scoring your GitHub issues.</p>
 				</div>
-				<div className="flex items-center gap-4 text-sm text-github-fg-muted">
+				<div className="flex items-center gap-6 text-sm text-github-fg-muted">
 					{milestones.length > 0 && (
 						<select
 							value={milestoneFilter ?? ""}
@@ -491,7 +495,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 						</select>
 					)}
 					<div className="flex items-center gap-2">
-						<span>Auto-refresh</span>
+						<span>Auto-refresh ({Math.round(refreshInterval / 1_000)}s)</span>
 						<button
 							role="switch"
 							aria-checked={autoRefresh}
@@ -692,7 +696,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 					</table>
 				</div>
 			</div>
-			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 1.3.1</p>
+			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 1.3.2</p>
 		</>
 	);
 }
