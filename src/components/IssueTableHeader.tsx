@@ -6,6 +6,8 @@ interface IssueTableHeaderProps {
 	onMilestoneFilterChange: (value: string | null) => void;
 	searchQuery: string;
 	onSearchQueryChange: (value: string) => void;
+	hideScored: boolean;
+	onHideScoredChange: (value: boolean) => void;
 	autoRefresh: boolean;
 	refreshInterval: number;
 	onAutoRefreshToggle: () => void;
@@ -17,6 +19,8 @@ export function IssueTableHeader({
 	onMilestoneFilterChange,
 	searchQuery,
 	onSearchQueryChange,
+	hideScored,
+	onHideScoredChange,
 	autoRefresh,
 	refreshInterval,
 	onAutoRefreshToggle,
@@ -45,7 +49,7 @@ export function IssueTableHeader({
 						type="search"
 						value={searchQuery}
 						onChange={(e) => onSearchQueryChange(e.target.value)}
-						placeholder="Search issues…"
+						placeholder="Search"
 						className="w-44 rounded border border-github-border bg-white py-1 pl-7 pr-2 text-xs text-github-fg placeholder-github-fg-muted focus:border-github-accent focus:outline-none focus:ring-1 focus:ring-github-accent"
 					/>
 				</div>
@@ -63,6 +67,15 @@ export function IssueTableHeader({
 						))}
 					</select>
 				)}
+				<label className="flex cursor-pointer items-center gap-1.5">
+					<input
+						type="checkbox"
+						checked={hideScored}
+						onChange={(e) => onHideScoredChange(e.target.checked)}
+						className="h-3.5 w-3.5 rounded border-github-border accent-github-accent"
+					/>
+					<span className="text-xs">Hide scored</span>
+				</label>
 				<div className="flex items-center gap-2">
 					<span>Auto-refresh ({Math.round(refreshInterval / 1_000)}s)</span>
 					<button
