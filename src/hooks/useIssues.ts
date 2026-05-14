@@ -70,6 +70,8 @@ export function useIssues({ org, projectId, autoRefresh }: UseIssuesOptions) {
 		isLoading: query.isLoading,
 		error: query.error ? (query.error instanceof Error ? query.error.message : "An error occurred") : null,
 		refreshInterval: refreshIntervalRef.current,
+		/** True while a background refetch is in flight (not the initial load). Used to show a fetching indicator. */
+		isFetching: query.isFetching && query.isSuccess,
 		/** Millisecond timestamp of the last successful fetch. Changes on every poll — use as an animation reset key. */
 		dataUpdatedAt: query.dataUpdatedAt,
 		/** Resets the adaptive interval and fires an immediate refetch — call when re-enabling auto-refresh. */

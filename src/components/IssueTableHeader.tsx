@@ -8,22 +8,27 @@ function CountdownRing({
 	interval,
 	fetchKey,
 	active,
+	isFetching,
 }: {
 	interval: number;
 	fetchKey: number;
 	active: boolean;
+	isFetching: boolean;
 }) {
+	const fetching = active && isFetching;
 	return (
 		<svg
 			width="12"
 			height="12"
 			viewBox="0 0 12 12"
-			className="-rotate-90"
-			aria-label={active ? `Next refresh in ~${Math.round(interval / 1000)}s` : "Auto-refresh paused"}
+			className={clsx("-rotate-90", fetching && "animate-pulse")}
+			aria-label={active ? (fetching ? "Refreshing…" : `Next refresh in ~${Math.round(interval / 1000)}s`) : "Auto-refresh paused"}
 		>
 			{/* Dim track */}
 			<circle cx="6" cy="6" r={RING_R} fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-20" />
-			{/* Animated arc — remounts (via key) on every fetch to restart the animation */}
+			{/* Animated arc — remounts (via key) after each successful fetch to restart the animation.
+			     While fetching, the animation style is removed so the arc holds at strokeDashoffset=0 (full)
+			     and the SVG pulses to indicate the request is in-flight. */}
 			<circle
 				key={active ? fetchKey : 0}
 				cx="6"
@@ -35,7 +40,7 @@ function CountdownRing({
 				strokeLinecap="round"
 				strokeDasharray={RING_C}
 				strokeDashoffset={active ? 0 : RING_C}
-				style={active ? { animation: `gitrice-countdown ${interval}ms linear forwards` } : undefined}
+				style={active && !fetching ? { animation: `gitrice-countdown ${interval}ms linear forwards` } : undefined}
 			/>
 		</svg>
 	);
@@ -52,6 +57,7 @@ interface IssueTableHeaderProps {
 	autoRefresh: boolean;
 	refreshInterval: number;
 	fetchKey: number;
+	isFetching: boolean;
 	onAutoRefreshToggle: () => void;
 }
 
@@ -66,6 +72,7 @@ export function IssueTableHeader({
 	autoRefresh,
 	refreshInterval,
 	fetchKey,
+	isFetching,
 	onAutoRefreshToggle,
 }: IssueTableHeaderProps) {
 	return (
@@ -120,7 +127,7 @@ export function IssueTableHeader({
 					<span className="text-xs">Hide scored</span>
 				</label>
 				<div className="flex items-center gap-2">
-					<CountdownRing interval={refreshInterval} fetchKey={fetchKey} active={autoRefresh} />
+					<CountdownRing interval={refreshInterval} fetchKey={fetchKey} active={autoRefresh} isFetching={isFetching} />
 					<span className="text-sm">Auto-refresh</span>
 					<button
 						role="switch"
