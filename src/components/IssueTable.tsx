@@ -476,7 +476,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 								</th>
 								<th className="px-4 py-3 text-center font-semibold text-github-fg w-32">
 									<span title="(Reach x Impact x Confidence) / Effort">RICE Score</span>
-								</th>							<th className="px-2 py-3 w-36" />							</tr>
+								</th>							<th className="px-2 py-3 w-10" />							</tr>
 						</thead>
 						<tbody className="divide-y divide-github-border-muted">
 							{displayedIssues.map((issue) => {
@@ -594,25 +594,24 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 										</td>
 										<td className="px-2 py-3 text-center">
 											{issue.computedScore !== null && (
-												<div className="relative inline-flex justify-center">
+												<div
+													className="relative inline-flex justify-center"
+													onMouseDown={(e) => e.nativeEvent.stopPropagation()}
+												>
 													<button
-														onMouseDown={(e) => e.stopPropagation()}
 														onClick={() => setOpenMenuIssueId(openMenuIssueId === issue.id ? null : issue.id)}
 														disabled={isRowBusy}
 														title="More actions"
 														className="rounded p-1 text-github-fg-muted transition-colors hover:bg-gray-100 hover:text-github-fg disabled:opacity-40"
 													>
 														<svg className="h-4 w-4" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
-															<circle cx="2" cy="8" r="1.5" />
+															<circle cx="8" cy="2" r="1.5" />
 															<circle cx="8" cy="8" r="1.5" />
-															<circle cx="14" cy="8" r="1.5" />
+															<circle cx="8" cy="14" r="1.5" />
 														</svg>
 													</button>
 													{openMenuIssueId === issue.id && (
-														<div
-															onMouseDown={(e) => e.stopPropagation()}
-															className="absolute right-0 top-full z-50 mt-1 w-44 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
-														>
+														<div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
 															{milestonePushEligible.has(issue.id) && (
 																<button
 																	onClick={() => { void handlePropagate(issue); setOpenMenuIssueId(null); }}
@@ -641,7 +640,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 					</table>
 				</div>
 			</div>
-			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 0.2.4</p>
+			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 1.2.1</p>
 		</>
 	);
 }
