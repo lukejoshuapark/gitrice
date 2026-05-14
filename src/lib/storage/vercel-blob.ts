@@ -1,4 +1,4 @@
-import { put, list } from "@vercel/blob";
+import { put, list, get } from "@vercel/blob";
 import type { RiceScore } from "@/types";
 import type { ScoreStore } from "./types";
 
@@ -14,11 +14,14 @@ function getToken(): string | undefined {
 	return process.env.BLOB_READ_WRITE_TOKEN;
 }
 
-async function fetchScore(downloadUrl: string): Promise<RiceScore | null> {
+async function fetchScore(url: string, token: string | undefined): Promise<RiceScore | null> {
 	try {
-		const res = await fetch(downloadUrl, { cache: "no-store" });
-		if (!res.ok) return null;
-		return await res.json() as RiceScore;
+		// useCache: false bypasses Vercel's CDN cache so we always read the latest version.
+		// get() uses undici internally and is not subject to Next.js's data cache.
+		const result = await get(url, { access: "private", token, useCache: false });
+		if (!result || result.statusCode !== 200) return null;
+		const text = await new Response(result.stream).text();
+		return JSON.parse(text) as RiceScore;
 	} catch {
 		return null;
 	}
@@ -35,7 +38,7 @@ export const vercelBlobStore: ScoreStore = {
 			const page = await list({ prefix, token, cursor });
 			await Promise.all(
 				page.blobs.map(async (blob) => {
-					const score = await fetchScore(blob.downloadUrl);
+					const score = await fetchScore(blob.url, token);
 					if (!score) return;
 					const filename = blob.pathname.slice(prefix.length);
 					const issueId = decodeURIComponent(filename.replace(/\.json$/, ""));
@@ -56,7 +59,7 @@ export const vercelBlobStore: ScoreStore = {
 		const blob = blobs.find((b) => b.pathname === path);
 		if (!blob) return null;
 
-		return fetchScore(blob.downloadUrl);
+		return fetchScore(blob.url, token);
 	},
 
 	async setScore(org, projectId, issueId, score) {
@@ -67,7 +70,7 @@ export const vercelBlobStore: ScoreStore = {
 		const { blobs } = await list({ prefix: path, token });
 		const existingBlob = blobs.find((b) => b.pathname === path);
 		if (existingBlob) {
-			existing = (await fetchScore(existingBlob.downloadUrl)) ?? existing;
+			existing = (await fetchScore(existingBlob.url, token)) ?? existing;
 		}
 
 		const merged: RiceScore = { ...existing, ...score };
