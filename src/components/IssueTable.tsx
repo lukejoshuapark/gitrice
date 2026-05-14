@@ -50,7 +50,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 		onIssueUpdated,
 	});
 
-	const { issues: fetchedIssues, riceScoreFieldId, isLoading, error, refreshInterval, resetAndRefetch } = useIssues({
+	const { issues: fetchedIssues, riceScoreFieldId, isLoading, error, refreshInterval, dataUpdatedAt, resetAndRefetch } = useIssues({
 		org,
 		projectId,
 		getBusyIds: saveManager.getBusyIds,
@@ -187,6 +187,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 				onHideScoredChange={setHideScored}
 				autoRefresh={autoRefresh}
 				refreshInterval={refreshInterval}
+				fetchKey={dataUpdatedAt}
 				onAutoRefreshToggle={() => {
 					const enabling = !autoRefresh;
 					setAutoRefresh(enabling);
@@ -422,7 +423,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 					)}
 				</div>
 			</div>
-			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 1.5.1</p>
+			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 1.5.2</p>
 		</>
 	);
 }

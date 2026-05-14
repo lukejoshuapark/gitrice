@@ -1,5 +1,46 @@
 import clsx from "clsx";
 
+// r=8, circumference = 2π×8 ≈ 50.27 — must match the CSS keyframe in globals.css
+const RING_R = 8;
+const RING_C = 2 * Math.PI * RING_R;
+
+function CountdownRing({
+	interval,
+	fetchKey,
+	active,
+}: {
+	interval: number;
+	fetchKey: number;
+	active: boolean;
+}) {
+	return (
+		<svg
+			width="20"
+			height="20"
+			viewBox="0 0 20 20"
+			className="-rotate-90"
+			aria-label={active ? `Next refresh in ~${Math.round(interval / 1000)}s` : "Auto-refresh paused"}
+		>
+			{/* Dim track */}
+			<circle cx="10" cy="10" r={RING_R} fill="none" stroke="currentColor" strokeWidth="2" className="opacity-20" />
+			{/* Animated arc — remounts (via key) on every fetch to restart the animation */}
+			<circle
+				key={active ? fetchKey : 0}
+				cx="10"
+				cy="10"
+				r={RING_R}
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="2"
+				strokeLinecap="round"
+				strokeDasharray={RING_C}
+				strokeDashoffset={active ? 0 : RING_C}
+				style={active ? { animation: `gitrice-countdown ${interval}ms linear forwards` } : undefined}
+			/>
+		</svg>
+	);
+}
+
 interface IssueTableHeaderProps {
 	milestones: string[];
 	milestoneFilter: string | null;
@@ -10,6 +51,7 @@ interface IssueTableHeaderProps {
 	onHideScoredChange: (value: boolean) => void;
 	autoRefresh: boolean;
 	refreshInterval: number;
+	fetchKey: number;
 	onAutoRefreshToggle: () => void;
 }
 
@@ -23,6 +65,7 @@ export function IssueTableHeader({
 	onHideScoredChange,
 	autoRefresh,
 	refreshInterval,
+	fetchKey,
 	onAutoRefreshToggle,
 }: IssueTableHeaderProps) {
 	return (
@@ -77,7 +120,7 @@ export function IssueTableHeader({
 					<span className="text-xs">Hide scored</span>
 				</label>
 				<div className="flex items-center gap-2">
-					<span>Auto-refresh ({Math.round(refreshInterval / 1_000)}s)</span>
+					<CountdownRing interval={refreshInterval} fetchKey={fetchKey} active={autoRefresh} />
 					<button
 						role="switch"
 						aria-checked={autoRefresh}

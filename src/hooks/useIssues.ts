@@ -93,6 +93,8 @@ export function useIssues({ org, projectId, getBusyIds, autoRefresh }: UseIssues
 		isLoading: query.isLoading,
 		error: query.error ? (query.error instanceof Error ? query.error.message : "An error occurred") : null,
 		refreshInterval: refreshIntervalRef.current,
+		/** Millisecond timestamp of the last successful fetch. Changes on every poll — use as an animation reset key. */
+		dataUpdatedAt: query.dataUpdatedAt,
 		/** Resets the adaptive interval and fires an immediate refetch — call when re-enabling auto-refresh. */
 		resetAndRefetch: () => {
 			refreshIntervalRef.current = 5_000;

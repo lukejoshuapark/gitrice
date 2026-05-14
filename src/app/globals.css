@@ -1,3 +1,8 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@keyframes gitrice-countdown {
+	from { stroke-dashoffset: 0; }
+	to   { stroke-dashoffset: 50.27; }
+}
