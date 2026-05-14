@@ -115,6 +115,8 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 	const [milestoneFilter, setMilestoneFilter] = useState<string | null>(null);
 	const [riceScoreFieldId, setRiceScoreFieldId] = useState<string | null>(null);
 	const [autoRefresh, setAutoRefresh] = useState(true);
+	const [lastSavedIssueId, setLastSavedIssueId] = useState<string | null>(null);
+	const lastSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	// Refs for batched save: accumulate per-issue pending field changes so a
 	// single PUT fires for all dirty fields instead of one PUT per field.
@@ -264,6 +266,9 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 				if (issue.id !== issueId) return issue;
 				return { ...issue, score: data.score, computedScore: data.computedScore };
 			}));
+			if (lastSavedTimerRef.current) clearTimeout(lastSavedTimerRef.current);
+			setLastSavedIssueId(issueId);
+			lastSavedTimerRef.current = setTimeout(() => setLastSavedIssueId(null), 5000);
 		} catch {
 			setErrorCells((prev) => {
 				const next = new Set(prev);
@@ -385,6 +390,9 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 				if (i.id !== issueId) return i;
 				return { ...i, score: data.score, computedScore: data.computedScore };
 			}));
+			if (lastSavedTimerRef.current) clearTimeout(lastSavedTimerRef.current);
+			setLastSavedIssueId(issueId);
+			lastSavedTimerRef.current = setTimeout(() => setLastSavedIssueId(null), 5000);
 		} catch {
 			// reset failure is silent
 		} finally {
@@ -569,6 +577,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 										className={[
 											"transition-opacity",
 											isRowBusy ? "opacity-50" : "",
+											issue.id === lastSavedIssueId ? "outline outline-2 outline-github-accent" : "",
 										].join(" ")}
 									>
 										<td className="px-4 py-3 text-github-fg-muted font-mono">
@@ -683,7 +692,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 					</table>
 				</div>
 			</div>
-			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 1.2.1</p>
+			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 1.3.0</p>
 		</>
 	);
 }
