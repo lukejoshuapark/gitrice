@@ -268,7 +268,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 			}));
 			if (lastSavedTimerRef.current) clearTimeout(lastSavedTimerRef.current);
 			setLastSavedIssueId(issueId);
-			lastSavedTimerRef.current = setTimeout(() => setLastSavedIssueId(null), 5000);
+			lastSavedTimerRef.current = setTimeout(() => setLastSavedIssueId(null), 30000);
 		} catch {
 			setErrorCells((prev) => {
 				const next = new Set(prev);
@@ -392,7 +392,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 			}));
 			if (lastSavedTimerRef.current) clearTimeout(lastSavedTimerRef.current);
 			setLastSavedIssueId(issueId);
-			lastSavedTimerRef.current = setTimeout(() => setLastSavedIssueId(null), 5000);
+			lastSavedTimerRef.current = setTimeout(() => setLastSavedIssueId(null), 30000);
 		} catch {
 			// reset failure is silent
 		} finally {
@@ -692,7 +692,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 					</table>
 				</div>
 			</div>
-			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 1.3.0</p>
+			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 1.3.1</p>
 		</>
 	);
 }
