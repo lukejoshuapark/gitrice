@@ -163,7 +163,6 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 			return next;
 		});
 
-		let saved = false;
 		try {
 			let url = `/api/scores?org=${encodeURIComponent(org)}&projectId=${encodeURIComponent(projectId)}&issueId=${encodeURIComponent(issueId)}`;
 			url += `&projectItemId=${encodeURIComponent(issueMeta.projectItemId)}`;
@@ -176,7 +175,13 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 				body: JSON.stringify(updates),
 			});
 			if (!res.ok) throw new Error("Save failed");
-			saved = true;
+
+			// Apply the server's merged score directly — no refetch needed.
+			const data = await res.json() as { score: RiceScore; computedScore: number | null };
+			setIssues((prev) => prev.map((issue) => {
+				if (issue.id !== issueId) return issue;
+				return { ...issue, score: data.score, computedScore: data.computedScore };
+			}));
 		} catch {
 			setErrorCells((prev) => {
 				const next = new Set(prev);
@@ -186,8 +191,6 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 				return next;
 			});
 		} finally {
-			// Clear before the refresh so the issue is no longer "busy" and the
-			// refresh can freely apply the server's newly computed score.
 			savingRef.current.delete(issueId);
 			setSavingIssues((prev) => {
 				const next = new Set(prev);
@@ -195,9 +198,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 				return next;
 			});
 		}
-		// Fetch the server-computed score now that the save is confirmed.
-		if (saved) void fetchData({ silent: true });
-	}, [org, projectId, fetchData]);
+	}, [org, projectId]);
 
 	/** Called by ScoreCell on every keystroke — updates field values locally; score recomputed by server on save. */
 	const handleFieldChange = useCallback((issueId: string, field: keyof RiceScore, value: number | null) => {

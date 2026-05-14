@@ -87,7 +87,7 @@ export async function PUT(request: NextRequest) {
 			}
 		}
 
-		return NextResponse.json({ ok: true });
+		return NextResponse.json({ score: merged, computedScore: computeRiceScore(merged) });
 	} catch (err) {
 		const message = err instanceof Error ? err.message : "Unknown error";
 		return NextResponse.json({ error: message }, { status: 500 });
