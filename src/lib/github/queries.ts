@@ -101,6 +101,20 @@ export const LIST_PROJECT_ITEMS = `
 	}
 `;
 
+export const CLEAR_PROJECT_ITEM_SCORE = `
+	mutation ClearProjectItemScore($projectId: ID!, $itemId: ID!, $fieldId: ID!) {
+		clearProjectV2ItemFieldValue(input: {
+			projectId: $projectId
+			itemId: $itemId
+			fieldId: $fieldId
+		}) {
+			projectV2Item {
+				id
+			}
+		}
+	}
+`;
+
 /**
  * Builds a single GraphQL mutation that updates all items in one request using
  * field aliases, replacing the previous N+1 pattern. Item IDs are GitHub-

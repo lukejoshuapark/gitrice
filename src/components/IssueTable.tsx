@@ -33,6 +33,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 	const [milestoneFilter, setMilestoneFilter] = useState<string | null>(null);
 	const [riceScoreFieldId, setRiceScoreFieldId] = useState<string | null>(null);
 	const [autoRefresh, setAutoRefresh] = useState(true);
+	const [openMenuIssueId, setOpenMenuIssueId] = useState<string | null>(null);
 
 	// Refs for batched save: accumulate per-issue pending field changes so a
 	// single PUT fires for all dirty fields instead of one PUT per field.
@@ -143,6 +144,14 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 		}, 10_000);
 		return () => clearInterval(id);
 	}, [autoRefresh, fetchData]);
+
+	// Close dropdown menu when clicking outside.
+	useEffect(() => {
+		if (!openMenuIssueId) return;
+		const close = () => setOpenMenuIssueId(null);
+		document.addEventListener("mousedown", close);
+		return () => document.removeEventListener("mousedown", close);
+	}, [openMenuIssueId]);
 
 	/** Flush all pending field changes for an issue as a single PUT request. */
 	const flushSave = useCallback(async (issueId: string) => {
@@ -278,6 +287,43 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 		if (propagated) void fetchData({ silent: true });
 	}, [issues, org, projectId, riceScoreFieldId, fetchData]);
 
+	const handleReset = useCallback(async (issueId: string) => {
+		const issueMeta = issueMetaRef.current.get(issueId);
+		if (!issueMeta) return;
+
+		savingRef.current.add(issueId);
+		setSavingIssues((prev) => new Set([...prev, issueId]));
+
+		try {
+			let url = `/api/scores?org=${encodeURIComponent(org)}&projectId=${encodeURIComponent(projectId)}&issueId=${encodeURIComponent(issueId)}`;
+			url += `&projectItemId=${encodeURIComponent(issueMeta.projectItemId)}`;
+			const fieldId = riceScoreFieldIdRef.current;
+			if (fieldId) url += `&fieldId=${encodeURIComponent(fieldId)}`;
+
+			const res = await fetch(url, {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ reach: null, impact: null, confidence: null, effort: null }),
+			});
+			if (!res.ok) throw new Error("Reset failed");
+
+			const data = await res.json() as { score: RiceScore; computedScore: number | null };
+			setIssues((prev) => prev.map((i) => {
+				if (i.id !== issueId) return i;
+				return { ...i, score: data.score, computedScore: data.computedScore };
+			}));
+		} catch {
+			// reset failure is silent
+		} finally {
+			savingRef.current.delete(issueId);
+			setSavingIssues((prev) => {
+				const next = new Set(prev);
+				next.delete(issueId);
+				return next;
+			});
+		}
+	}, [org, projectId]);
+
 	// Issues where "Push to Milestone" should appear: has a computed score AND
 	// shares a milestone with at least one other issue whose computed score differs.
 	const milestonePushEligible = useMemo(() => {
@@ -303,6 +349,18 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 		() => milestoneFilter ? issues.filter((i) => i.milestone?.title === milestoneFilter) : issues,
 		[issues, milestoneFilter]
 	);
+
+	const milestones = useMemo(() => {
+		const seen = new Set<string>();
+		const result: string[] = [];
+		for (const issue of issues) {
+			if (issue.milestone && !seen.has(issue.milestone.title)) {
+				seen.add(issue.milestone.title);
+				result.push(issue.milestone.title);
+			}
+		}
+		return result.sort();
+	}, [issues]);
 
 	if (loading) {
 		return (
@@ -338,27 +396,41 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 					<h2 className="text-xl font-semibold text-github-fg">Project Issues</h2>
 					<p className="mt-1 text-sm text-github-fg-muted">A utility tool for RICE scoring your GitHub issues.</p>
 				</div>
-				<div className="flex items-center gap-2 text-sm text-github-fg-muted">
-					<span>Auto-refresh</span>
-					<button
-						role="switch"
-						aria-checked={autoRefresh}
-						onClick={() => setAutoRefresh((v) => !v)}
-						title={autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh"}
-						className={[
-							"relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent",
-							"transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-github-accent focus:ring-offset-2",
-							autoRefresh ? "bg-github-accent" : "bg-gray-300",
-						].join(" ")}
-					>
-						<span
+				<div className="flex items-center gap-4 text-sm text-github-fg-muted">
+					{milestones.length > 0 && (
+						<select
+							value={milestoneFilter ?? ""}
+							onChange={(e) => setMilestoneFilter(e.target.value || null)}
+							className="rounded border border-github-border bg-white px-2 py-1 text-xs text-github-fg focus:border-github-accent focus:outline-none"
+						>
+							<option value="">All milestones</option>
+							{milestones.map((m) => (
+								<option key={m} value={m}>{m}</option>
+							))}
+						</select>
+					)}
+					<div className="flex items-center gap-2">
+						<span>Auto-refresh</span>
+						<button
+							role="switch"
+							aria-checked={autoRefresh}
+							onClick={() => setAutoRefresh((v) => !v)}
+							title={autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh"}
 							className={[
-								"pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow",
-								"transition duration-200 ease-in-out",
-								autoRefresh ? "translate-x-4" : "translate-x-0",
+								"relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent",
+								"transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-github-accent focus:ring-offset-2",
+								autoRefresh ? "bg-github-accent" : "bg-gray-300",
 							].join(" ")}
-						/>
-					</button>
+						>
+							<span
+								className={[
+									"pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow",
+									"transition duration-200 ease-in-out",
+									autoRefresh ? "translate-x-4" : "translate-x-0",
+								].join(" ")}
+							/>
+						</button>
+					</div>
 				</div>
 			</div>
 
@@ -521,15 +593,45 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 											</div>
 										</td>
 										<td className="px-2 py-3 text-center">
-											{milestonePushEligible.has(issue.id) && (
-												<button
-													onClick={() => handlePropagate(issue)}
-													disabled={isPropagating}
-													title="Copy RICE values to all issues with the same milestone"
-													className="rounded border border-github-border px-2 py-1 text-xs text-github-fg-muted transition-colors hover:border-github-accent hover:text-github-accent disabled:opacity-40"
-												>
-													Push to Milestone
-												</button>
+											{issue.computedScore !== null && (
+												<div className="relative inline-flex justify-center">
+													<button
+														onMouseDown={(e) => e.stopPropagation()}
+														onClick={() => setOpenMenuIssueId(openMenuIssueId === issue.id ? null : issue.id)}
+														disabled={isRowBusy}
+														title="More actions"
+														className="rounded p-1 text-github-fg-muted transition-colors hover:bg-gray-100 hover:text-github-fg disabled:opacity-40"
+													>
+														<svg className="h-4 w-4" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+															<circle cx="2" cy="8" r="1.5" />
+															<circle cx="8" cy="8" r="1.5" />
+															<circle cx="14" cy="8" r="1.5" />
+														</svg>
+													</button>
+													{openMenuIssueId === issue.id && (
+														<div
+															onMouseDown={(e) => e.stopPropagation()}
+															className="absolute right-0 top-full z-50 mt-1 w-44 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+														>
+															{milestonePushEligible.has(issue.id) && (
+																<button
+																	onClick={() => { void handlePropagate(issue); setOpenMenuIssueId(null); }}
+																	disabled={isPropagating}
+																	className="flex w-full items-center px-3 py-1.5 text-left text-xs text-github-fg hover:bg-gray-50 disabled:opacity-40"
+																>
+																	Push to Milestone
+																</button>
+															)}
+															<button
+																onClick={() => { void handleReset(issue.id); setOpenMenuIssueId(null); }}
+																disabled={isRowBusy}
+																className="flex w-full items-center px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 disabled:opacity-40"
+															>
+																Reset
+															</button>
+														</div>
+													)}
+												</div>
 											)}
 										</td>
 									</tr>

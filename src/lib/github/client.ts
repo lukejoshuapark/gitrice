@@ -4,6 +4,7 @@ import {
 	LIST_PROJECT_ITEMS,
 	GET_PROJECT_FIELDS,
 	UPDATE_PROJECT_ITEM_SCORE,
+	CLEAR_PROJECT_ITEM_SCORE,
 	buildBatchUpdateMutation,
 } from "./queries";
 
@@ -289,6 +290,14 @@ export function getGitHubClient(accessToken: string) {
 				fieldId,
 				value: score,
 			});
+		},
+
+		async clearProjectItemScore(
+			projectId: string,
+			itemId: string,
+			fieldId: string
+		): Promise<void> {
+			await graphql(CLEAR_PROJECT_ITEM_SCORE, { projectId, itemId, fieldId });
 		},
 
 		/** Sends all updates as a single aliased mutation instead of N individual requests. */

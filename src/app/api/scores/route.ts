@@ -81,9 +81,9 @@ export async function PUT(request: NextRequest) {
 		if (projectItemId && fieldId) {
 			const computed = computeRiceScore(merged);
 			if (computed !== null) {
-				await client.updateProjectItemScore(projectId, projectItemId, fieldId, Math.round(computed)).catch(() => {
-					// Non-fatal: GitHub sync failure does not fail the local save
-				});
+				await client.updateProjectItemScore(projectId, projectItemId, fieldId, Math.round(computed)).catch(() => {});
+			} else if (merged.reach === null && merged.impact === null && merged.confidence === null && merged.effort === null) {
+				await client.clearProjectItemScore(projectId, projectItemId, fieldId).catch(() => {});
 			}
 		}
 
