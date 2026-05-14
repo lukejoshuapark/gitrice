@@ -4,6 +4,8 @@ interface IssueTableHeaderProps {
 	milestones: string[];
 	milestoneFilter: string | null;
 	onMilestoneFilterChange: (value: string | null) => void;
+	searchQuery: string;
+	onSearchQueryChange: (value: string) => void;
 	autoRefresh: boolean;
 	refreshInterval: number;
 	onAutoRefreshToggle: () => void;
@@ -13,6 +15,8 @@ export function IssueTableHeader({
 	milestones,
 	milestoneFilter,
 	onMilestoneFilterChange,
+	searchQuery,
+	onSearchQueryChange,
 	autoRefresh,
 	refreshInterval,
 	onAutoRefreshToggle,
@@ -26,6 +30,25 @@ export function IssueTableHeader({
 				</p>
 			</div>
 			<div className="flex items-center gap-6 text-sm text-github-fg-muted">
+				<div className="relative">
+					<svg
+						className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-github-fg-muted"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						strokeWidth={2}
+						aria-hidden="true"
+					>
+						<path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+					</svg>
+					<input
+						type="search"
+						value={searchQuery}
+						onChange={(e) => onSearchQueryChange(e.target.value)}
+						placeholder="Search issues…"
+						className="w-44 rounded border border-github-border bg-white py-1 pl-7 pr-2 text-xs text-github-fg placeholder-github-fg-muted focus:border-github-accent focus:outline-none focus:ring-1 focus:ring-github-accent"
+					/>
+				</div>
 				{milestones.length > 0 && (
 					<select
 						value={milestoneFilter ?? ""}

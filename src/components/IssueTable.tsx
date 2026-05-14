@@ -19,6 +19,7 @@ interface IssueTableProps {
 export function IssueTable({ org, projectId }: IssueTableProps) {
 	const [issues, setIssues] = useState<IssueWithScore[]>([]);
 	const [milestoneFilter, setMilestoneFilter] = useState<string | null>(null);
+	const [searchQuery, setSearchQuery] = useState("");
 	const [autoRefresh, setAutoRefresh] = useState(true);
 
 	const riceScoreFieldIdRef = useRef<string | null>(null);
@@ -40,10 +41,11 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 		onIssueUpdated,
 	});
 
-	const { issues: fetchedIssues, riceScoreFieldId, isLoading, error, refreshInterval } = useIssues({
+	const { issues: fetchedIssues, riceScoreFieldId, isLoading, error, refreshInterval, resetAndRefetch } = useIssues({
 		org,
 		projectId,
 		getBusyIds: saveManager.getBusyIds,
+		autoRefresh,
 	});
 
 	// Sync fetched issues into local state; keep field-ids ref current.
@@ -60,9 +62,10 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 		saveManager.syncIssueMeta(issues);
 	}, [issues, saveManager]);
 
-	// Reset milestone filter when org/project changes.
+	// Reset milestone filter and search when org/project changes.
 	useEffect(() => {
 		setMilestoneFilter(null);
+		setSearchQuery("");
 	}, [org, projectId]);
 
 	const { propagatingMilestones, handlePropagate } = usePropagation({
@@ -109,13 +112,21 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 		return eligible;
 	}, [issues]);
 
-	const displayedIssues = useMemo(
-		() =>
-			milestoneFilter
-				? issues.filter((i) => i.milestone?.title === milestoneFilter)
-				: issues,
-		[issues, milestoneFilter]
-	);
+	const displayedIssues = useMemo(() => {
+		let result = milestoneFilter
+			? issues.filter((i) => i.milestone?.title === milestoneFilter)
+			: issues;
+		const q = searchQuery.trim().toLowerCase();
+		if (q) {
+			result = result.filter(
+				(i) =>
+					i.title.toLowerCase().includes(q) ||
+					(i.author?.login ?? "").toLowerCase().includes(q) ||
+					String(i.number).includes(q),
+			);
+		}
+		return result;
+	}, [issues, milestoneFilter, searchQuery]);
 
 	const milestones = useMemo(() => {
 		const seen = new Set<string>();
@@ -161,20 +172,39 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 				milestones={milestones}
 				milestoneFilter={milestoneFilter}
 				onMilestoneFilterChange={setMilestoneFilter}
+				searchQuery={searchQuery}
+				onSearchQueryChange={setSearchQuery}
 				autoRefresh={autoRefresh}
 				refreshInterval={refreshInterval}
-				onAutoRefreshToggle={() => setAutoRefresh((v) => !v)}
+				onAutoRefreshToggle={() => {
+					const enabling = !autoRefresh;
+					setAutoRefresh(enabling);
+					if (enabling) resetAndRefetch();
+				}}
 			/>
 
 			<div className="space-y-3">
-				{milestoneFilter && (
+				{(milestoneFilter || searchQuery) && (
 					<div className="flex items-center gap-2 rounded-md border border-github-border bg-white px-3 py-2 text-sm">
-						<span className="text-github-fg-muted">Filtered by milestone:</span>
-						<span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-github-fg">
-							{milestoneFilter}
-						</span>
+						{milestoneFilter && (
+							<>
+								<span className="text-github-fg-muted">Milestone:</span>
+								<span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-github-fg">
+									{milestoneFilter}
+								</span>
+							</>
+						)}
+						{searchQuery && (
+							<>
+								{milestoneFilter && <span className="text-github-border">·</span>}
+								<span className="text-github-fg-muted">Search:</span>
+								<span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-github-fg">
+									{searchQuery}
+								</span>
+							</>
+						)}
 						<button
-							onClick={() => setMilestoneFilter(null)}
+							onClick={() => { setMilestoneFilter(null); setSearchQuery(""); }}
 							className="ml-auto flex items-center gap-1 rounded text-xs text-github-fg-muted hover:text-github-fg"
 						>
 							<svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -361,7 +391,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 					</table>
 				</div>
 			</div>
-			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 1.4.0</p>
+			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 1.5.0</p>
 		</>
 	);
 }

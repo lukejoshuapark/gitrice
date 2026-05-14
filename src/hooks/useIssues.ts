@@ -27,9 +27,11 @@ interface UseIssuesOptions {
 	projectId: string;
 	/** Returns the set of issue IDs that are currently busy (being saved/edited). */
 	getBusyIds: () => Set<string>;
+	/** When false, polling is suspended. */
+	autoRefresh: boolean;
 }
 
-export function useIssues({ org, projectId, getBusyIds }: UseIssuesOptions) {
+export function useIssues({ org, projectId, getBusyIds, autoRefresh }: UseIssuesOptions) {
 	// Tracks the last seen issue-id hash and when it last changed for adaptive polling.
 	const lastHashRef = useRef<string | null>(null);
 	const lastHashChangeTimeRef = useRef<number>(Date.now());
@@ -50,6 +52,17 @@ export function useIssues({ org, projectId, getBusyIds }: UseIssuesOptions) {
 		},
 		// Merge: keep busy rows from the previous result.
 		select: (fresh) => {
+			// Always update the adaptive interval based on whether the issue list changed.
+			// This MUST happen before any early return so polling never gets permanently stuck.
+			const newHash = fresh.issues.map((i) => i.id).join(",");
+			if (newHash !== lastHashRef.current) {
+				lastHashRef.current = newHash;
+				lastHashChangeTimeRef.current = Date.now();
+				refreshIntervalRef.current = 5_000;
+			} else {
+				refreshIntervalRef.current = Math.min(refreshIntervalRef.current + 1_000, 30_000);
+			}
+
 			const busy = getBusyIds();
 			if (busy.size === 0) return fresh;
 
@@ -60,19 +73,11 @@ export function useIssues({ org, projectId, getBusyIds }: UseIssuesOptions) {
 			const prevMap = new Map(prev.issues.map((i) => [i.id, i]));
 			const merged = fresh.issues.map((m) => (busy.has(m.id) ? (prevMap.get(m.id) ?? m) : m));
 
-			// Adaptive polling: speed up when list changes, back off when stable.
-			const newHash = fresh.issues.map((i) => i.id).join(",");
-			if (newHash !== lastHashRef.current) {
-				lastHashRef.current = newHash;
-				lastHashChangeTimeRef.current = Date.now();
-				refreshIntervalRef.current = 5_000;
-			} else {
-				refreshIntervalRef.current = Math.min(refreshIntervalRef.current + 1_000, 30_000);
-			}
-
 			return { ...fresh, issues: merged };
 		},
 		refetchInterval: (query) => {
+			// Polling suspended by user.
+			if (!autoRefresh) return false;
 			// Stop polling after 10 minutes with no list change.
 			if (Date.now() - lastHashChangeTimeRef.current > 10 * 60 * 1000) return false;
 			// Don't poll during the initial load.
@@ -88,6 +93,13 @@ export function useIssues({ org, projectId, getBusyIds }: UseIssuesOptions) {
 		isLoading: query.isLoading,
 		error: query.error ? (query.error instanceof Error ? query.error.message : "An error occurred") : null,
 		refreshInterval: refreshIntervalRef.current,
+		/** Resets the adaptive interval and fires an immediate refetch — call when re-enabling auto-refresh. */
+		resetAndRefetch: () => {
+			refreshIntervalRef.current = 5_000;
+			lastHashChangeTimeRef.current = Date.now();
+			lastHashRef.current = null;
+			void query.refetch();
+		},
 		refetch: query.refetch,
 	};
 }
