@@ -1,8 +1,90 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { createPopper } from "@popperjs/core";
 import { ScoreCell } from "./ScoreCell";
 import type { IssueWithScore, RiceScore } from "@/types";
+
+interface RowMenuProps {
+	disabled: boolean;
+	isPropagating: boolean;
+	showPushToMilestone: boolean;
+	onPushToMilestone: () => void;
+	onReset: () => void;
+}
+
+function RowMenu({ disabled, isPropagating, showPushToMilestone, onPushToMilestone, onReset }: RowMenuProps) {
+	const [open, setOpen] = useState(false);
+	const btnRef = useRef<HTMLButtonElement>(null);
+	const menuRef = useRef<HTMLDivElement>(null);
+
+	// Position the menu with Popper whenever it opens.
+	useEffect(() => {
+		if (!open || !btnRef.current || !menuRef.current) return;
+		const popper = createPopper(btnRef.current, menuRef.current, {
+			placement: "bottom-end",
+			modifiers: [{ name: "offset", options: { offset: [0, 4] } }],
+		});
+		return () => popper.destroy();
+	}, [open]);
+
+	// Close on any click outside the button or menu (capture phase fires before React handlers).
+	useEffect(() => {
+		if (!open) return;
+		const handler = (e: MouseEvent) => {
+			if (
+				btnRef.current?.contains(e.target as Node) ||
+				menuRef.current?.contains(e.target as Node)
+			) return;
+			setOpen(false);
+		};
+		document.addEventListener("click", handler, true);
+		return () => document.removeEventListener("click", handler, true);
+	}, [open]);
+
+	return (
+		<>
+			<button
+				ref={btnRef}
+				onClick={() => setOpen((v) => !v)}
+				disabled={disabled}
+				title="More actions"
+				className="rounded p-1 text-github-fg-muted transition-colors hover:bg-gray-100 hover:text-github-fg disabled:opacity-40"
+			>
+				<svg className="h-4 w-4" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+					<circle cx="8" cy="2" r="1.5" />
+					<circle cx="8" cy="8" r="1.5" />
+					<circle cx="8" cy="14" r="1.5" />
+				</svg>
+			</button>
+			{open && createPortal(
+				<div
+					ref={menuRef}
+					className="z-50 w-44 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+				>
+					{showPushToMilestone && (
+						<button
+							onClick={() => { onPushToMilestone(); setOpen(false); }}
+							disabled={isPropagating}
+							className="flex w-full items-center px-3 py-1.5 text-left text-xs text-github-fg hover:bg-gray-50 disabled:opacity-40"
+						>
+							Push to Milestone
+						</button>
+					)}
+					<button
+						onClick={() => { onReset(); setOpen(false); }}
+						disabled={disabled}
+						className="flex w-full items-center px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 disabled:opacity-40"
+					>
+						Reset
+					</button>
+				</div>,
+				document.body
+			)}
+		</>
+	);
+}
 
 interface IssueTableProps {
 	org: string;
@@ -33,7 +115,6 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 	const [milestoneFilter, setMilestoneFilter] = useState<string | null>(null);
 	const [riceScoreFieldId, setRiceScoreFieldId] = useState<string | null>(null);
 	const [autoRefresh, setAutoRefresh] = useState(true);
-	const [openMenuIssueId, setOpenMenuIssueId] = useState<string | null>(null);
 
 	// Refs for batched save: accumulate per-issue pending field changes so a
 	// single PUT fires for all dirty fields instead of one PUT per field.
@@ -144,14 +225,6 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 		}, 10_000);
 		return () => clearInterval(id);
 	}, [autoRefresh, fetchData]);
-
-	// Close dropdown menu when clicking outside.
-	useEffect(() => {
-		if (!openMenuIssueId) return;
-		const close = () => setOpenMenuIssueId(null);
-		document.addEventListener("mousedown", close);
-		return () => document.removeEventListener("mousedown", close);
-	}, [openMenuIssueId]);
 
 	/** Flush all pending field changes for an issue as a single PUT request. */
 	const flushSave = useCallback(async (issueId: string) => {
@@ -594,43 +667,13 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 										</td>
 										<td className="px-2 py-3 text-center">
 											{issue.computedScore !== null && (
-												<div
-													className="relative inline-flex justify-center"
-													onMouseDown={(e) => e.nativeEvent.stopPropagation()}
-												>
-													<button
-														onClick={() => setOpenMenuIssueId(openMenuIssueId === issue.id ? null : issue.id)}
-														disabled={isRowBusy}
-														title="More actions"
-														className="rounded p-1 text-github-fg-muted transition-colors hover:bg-gray-100 hover:text-github-fg disabled:opacity-40"
-													>
-														<svg className="h-4 w-4" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
-															<circle cx="8" cy="2" r="1.5" />
-															<circle cx="8" cy="8" r="1.5" />
-															<circle cx="8" cy="14" r="1.5" />
-														</svg>
-													</button>
-													{openMenuIssueId === issue.id && (
-														<div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
-															{milestonePushEligible.has(issue.id) && (
-																<button
-																	onClick={() => { void handlePropagate(issue); setOpenMenuIssueId(null); }}
-																	disabled={isPropagating}
-																	className="flex w-full items-center px-3 py-1.5 text-left text-xs text-github-fg hover:bg-gray-50 disabled:opacity-40"
-																>
-																	Push to Milestone
-																</button>
-															)}
-															<button
-																onClick={() => { void handleReset(issue.id); setOpenMenuIssueId(null); }}
-																disabled={isRowBusy}
-																className="flex w-full items-center px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 disabled:opacity-40"
-															>
-																Reset
-															</button>
-														</div>
-													)}
-												</div>
+												<RowMenu
+													disabled={isRowBusy}
+													isPropagating={isPropagating}
+													showPushToMilestone={milestonePushEligible.has(issue.id)}
+													onPushToMilestone={() => void handlePropagate(issue)}
+													onReset={() => void handleReset(issue.id)}
+												/>
 											)}
 										</td>
 									</tr>
