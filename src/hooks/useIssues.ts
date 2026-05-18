@@ -22,7 +22,7 @@ export function issuesQueryKey(org: string, projectId: string) {
 	return ["issues", org, projectId] as const;
 }
 
-const POLL_INTERVAL = 10_000;
+const POLL_INTERVAL = 5_000;
 
 interface UseIssuesOptions {
 	org: string;
