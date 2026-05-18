@@ -54,6 +54,8 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 		org,
 		projectId,
 		autoRefresh,
+		getBusyIds: saveManager.getBusyIds,
+		onIdleTimeout: () => setAutoRefresh(false),
 	});
 
 	// Sync fetched issues into local state, protecting any rows that are currently busy
@@ -195,6 +197,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 				refreshInterval={refreshInterval}
 				fetchKey={dataUpdatedAt}
 				isFetching={isFetching}
+				isEditing={saveManager.focusedIssueId !== null}
 				onAutoRefreshToggle={() => {
 					const enabling = !autoRefresh;
 					setAutoRefresh(enabling);
@@ -291,11 +294,11 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 										<tr
 											key={issue.id}
 											onFocus={() => {
-												saveManager.focusedIssueRef.current = issue.id;
+												saveManager.setFocusedIssue(issue.id);
 											}}
 											onBlur={(e) => {
 												if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-													saveManager.focusedIssueRef.current = null;
+													saveManager.setFocusedIssue(null);
 													saveManager.handleRowBlur(issue.id);
 												}
 											}}
@@ -430,7 +433,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 					)}
 				</div>
 			</div>
-			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 1.5.5</p>
+			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 1.5.6</p>
 		</>
 	);
 }

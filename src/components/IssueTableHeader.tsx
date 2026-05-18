@@ -9,20 +9,31 @@ function CountdownRing({
 	fetchKey,
 	active,
 	isFetching,
+	isEditing,
 }: {
 	interval: number;
 	fetchKey: number;
 	active: boolean;
 	isFetching: boolean;
+	isEditing: boolean;
 }) {
-	const fetching = active && isFetching;
+	// Polling runs only when auto-refresh is on and no row is being edited.
+	const effectivelyActive = active && !isEditing;
+	const fetching = effectivelyActive && isFetching;
+	const ariaLabel = !active
+		? "Auto-refresh paused"
+		: isEditing
+			? "Auto-refresh paused while editing"
+			: fetching
+				? "Refreshing…"
+				: `Next refresh in ~${Math.round(interval / 1000)}s`;
 	return (
 		<svg
 			width="12"
 			height="12"
 			viewBox="0 0 12 12"
 			className={clsx("-rotate-90", fetching && "animate-pulse")}
-			aria-label={active ? (fetching ? "Refreshing…" : `Next refresh in ~${Math.round(interval / 1000)}s`) : "Auto-refresh paused"}
+			aria-label={ariaLabel}
 		>
 			{/* Dim track */}
 			<circle cx="6" cy="6" r={RING_R} fill="none" stroke="currentColor" strokeWidth="1.5" className="opacity-20" />
@@ -30,7 +41,7 @@ function CountdownRing({
 			     While fetching, the animation style is removed so the arc holds at strokeDashoffset=0 (full)
 			     and the SVG pulses to indicate the request is in-flight. */}
 			<circle
-				key={active ? fetchKey : 0}
+				key={effectivelyActive ? fetchKey : 0}
 				cx="6"
 				cy="6"
 				r={RING_R}
@@ -39,8 +50,8 @@ function CountdownRing({
 				strokeWidth="1.5"
 				strokeLinecap="round"
 				strokeDasharray={RING_C}
-				strokeDashoffset={active ? 0 : RING_C}
-				style={active && !fetching ? { animation: `gitrice-countdown ${interval}ms linear forwards` } : undefined}
+				strokeDashoffset={effectivelyActive ? 0 : RING_C}
+				style={effectivelyActive && !fetching ? { animation: `gitrice-countdown ${interval}ms linear forwards` } : undefined}
 			/>
 		</svg>
 	);
@@ -58,6 +69,7 @@ interface IssueTableHeaderProps {
 	refreshInterval: number;
 	fetchKey: number;
 	isFetching: boolean;
+	isEditing: boolean;
 	onAutoRefreshToggle: () => void;
 }
 
@@ -73,6 +85,7 @@ export function IssueTableHeader({
 	refreshInterval,
 	fetchKey,
 	isFetching,
+	isEditing,
 	onAutoRefreshToggle,
 }: IssueTableHeaderProps) {
 	return (
@@ -127,7 +140,7 @@ export function IssueTableHeader({
 					<span className="text-xs">Hide scored</span>
 				</label>
 				<div className="flex items-center gap-2">
-					<CountdownRing interval={refreshInterval} fetchKey={fetchKey} active={autoRefresh} isFetching={isFetching} />
+					<CountdownRing interval={refreshInterval} fetchKey={fetchKey} active={autoRefresh} isFetching={isFetching} isEditing={isEditing} />
 					<span className="text-sm">Auto-refresh</span>
 					<button
 						role="switch"

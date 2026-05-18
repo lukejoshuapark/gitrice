@@ -18,6 +18,8 @@ export function useSaveManager({
 	const [savingIssues, setSavingIssues] = useState<Set<string>>(new Set());
 	const [errorCells, setErrorCells] = useState<Set<string>>(new Set());
 	const [lastSavedIssueId, setLastSavedIssueId] = useState<string | null>(null);
+	// Reactive focused-row state (drives CountdownRing pause); ref is kept for synchronous getBusyIds reads.
+	const [focusedIssueId, setFocusedIssueId] = useState<string | null>(null);
 
 	// Batched pending field changes: accumulate per-issue so a single PUT fires for all dirty fields.
 	const pendingUpdates = useRef<Map<string, Partial<RiceScore>>>(new Map());
@@ -32,6 +34,12 @@ export function useSaveManager({
 	const issueMetaRef = useRef<Map<string, { projectItemId: string }>>(new Map());
 	// Timer ref for the last-saved highlight.
 	const lastSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	/** Sets the focused row, updating both the ref (for sync reads) and the reactive state. */
+	const setFocusedIssue = useCallback((id: string | null) => {
+		focusedIssueRef.current = id;
+		setFocusedIssueId(id);
+	}, []);
 
 	/** Returns the set of issue IDs that should not be overwritten by a background refresh. */
 	const getBusyIds = useCallback((): Set<string> => {
@@ -201,7 +209,8 @@ export function useSaveManager({
 		savingIssues,
 		errorCells,
 		lastSavedIssueId,
-		focusedIssueRef,
+		focusedIssueId,
+		setFocusedIssue,
 		getBusyIds,
 		syncIssueMeta,
 		markPropagating,
