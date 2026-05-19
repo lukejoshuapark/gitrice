@@ -107,10 +107,12 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 	);
 
 	// Issues where "Push to Milestone" should appear.
+	// An issue is eligible when it has a computed score AND at least one sibling in the
+	// same milestone has a different score (including null/unscored siblings).
 	const milestonePushEligible = useMemo(() => {
 		const byMilestone = new Map<string, IssueWithScore[]>();
 		for (const issue of issues) {
-			if (!issue.milestone || issue.computedScore === null) continue;
+			if (!issue.milestone) continue;
 			const title = issue.milestone.title;
 			if (!byMilestone.has(title)) byMilestone.set(title, []);
 			byMilestone.get(title)!.push(issue);
@@ -118,9 +120,12 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 		const eligible = new Set<string>();
 		for (const siblings of byMilestone.values()) {
 			if (siblings.length < 2) continue;
-			const first = siblings[0].computedScore;
-			if (siblings.some((s) => s.computedScore !== first)) {
-				for (const s of siblings) eligible.add(s.id);
+			for (const issue of siblings) {
+				if (issue.computedScore === null) continue;
+				const allMatch = siblings.every(
+					(s) => s.id === issue.id || s.computedScore === issue.computedScore
+				);
+				if (!allMatch) eligible.add(issue.id);
 			}
 		}
 		return eligible;
@@ -433,7 +438,7 @@ export function IssueTable({ org, projectId }: IssueTableProps) {
 					)}
 				</div>
 			</div>
-			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 1.5.6</p>
+			<p className="mt-2 text-right text-xs text-github-fg-muted">Version 1.5.7</p>
 		</>
 	);
 }
